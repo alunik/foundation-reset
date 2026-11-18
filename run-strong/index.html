@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Run Strong</title>
+  <meta name="theme-color" content="#f3f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111614" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Run Strong">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="view"></main>
+
+  <button id="resume" class="resume" hidden onclick="location.hash='#/workout'"><span>Resume</span> ›</button>
+
+  <div id="rest" class="rest" hidden>
+    <div class="rest-fill" id="rest-fill"></div>
+    <div class="rest-inner">
+      <span class="rest-label">Rest</span>
+      <span id="rest-time" class="rest-time">1:15</span>
+      <button data-action="rest-add">+15s</button>
+      <button data-action="rest-skip">Skip</button>
+    </div>
+  </div>
+
+  <nav class="tabbar">
+    <a href="#/today" data-tab="today"><svg viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg>Today</a>
+    <a href="#/program" data-tab="program"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Plan</a>
+    <a href="#/history" data-tab="history"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>History</a>
+    <a href="#/progress" data-tab="progress"><svg viewBox="0 0 24 24"><path d="M4 19l5-6 4 3 7-9"/><path d="M15 7h5v5"/></svg>Progress</a>
+  </nav>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="program.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
