@@ -27,3 +27,27 @@ python3 -m http.server 8765 --directory app
 
 Edit `app/program.js`. Keep exercise `id`s stable so history and "last weight" keep matching.
 After deploying a change, bump `VERSION` in `app/sw.js` so phones pick up the new files.
+
+---
+
+# Run Strong — strength alongside Runna
+
+A second, separate app in `run-strong/` (same no-build PWA setup, its own data on the phone).
+Two heavy gym sessions a week (A: squat + bench · B: trap-bar deadlift + pull-ups, plus jumps,
+calves and a couple of accessories) built around a Runna half-marathon plan.
+
+- **Phases change by date**: ramp-in (first 2 weeks) → base "build strength" → half block "hold strength"
+  (fewer sets, accessories dropped) → taper (2 × 3 at ~80%) → race week (upper body only).
+  Deload every 4th week (half the sets), which you can switch on or off for any week to match Runna.
+- **Today**: race countdown, the week with Runna's run days (Mon easy · Wed key · Thu easy · Sun long), today's session.
+- **Workout**: weight, reps and "reps left in the tank" per exercise; suggests next time's weight
+  (double progression in base, hold in the half block, ~80% in the taper).
+- **Progress**: key-lift trends, settings for programme start / half-block start / race day, backup.
+
+Dates, exercises and the weekly layout live in `run-strong/program.js`.
+
+```bash
+python3 -m http.server 8766 --directory run-strong
+```
+
+Bump `VERSION` in `run-strong/sw.js` after deploying changes.
