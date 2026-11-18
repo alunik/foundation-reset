@@ -285,3 +285,14 @@ details.week.past { opacity: .7; }
 .row.lift { align-items: center; }
 .spark { flex: none; }
 .spark path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.strip-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 4px 0; }
+.strip-foot a { font-weight: 650; white-space: nowrap; }
+.note.warn { background: #f7e7c6; color: #5c4210; }
+@media (prefers-color-scheme: dark) { .note.warn { background: #3a2f17; color: #f0d79c; } }
+.week-runs { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--bg); border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; }
+.week-runs span { font-weight: 650; white-space: nowrap; }
+.week-edit .row { align-items: flex-start; gap: 8px; }
+.wk-day { width: 52px; flex: none; padding-top: 8px; }
+.wk-run { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.week-edit select, .week-edit input { padding: 8px 10px; }
+.wk-gym { width: 96px; flex: none; }

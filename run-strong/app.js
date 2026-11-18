@@ -4,14 +4,13 @@
 const STORE_KEY = "rs-state-v1";
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const GYM_DAYS = Object.entries(PROGRAM.schedule).filter(([, s]) => s.gym).map(([d, s]) => [Number(d), s.gym]);
 const RIR_OPTS = [0, 1, 2, 3, 4];
 
 /* ---------- state ---------- */
 let state = load();
 function blank() {
   return { startDate: null, blockStart: PROGRAM.defaults.blockStart, raceDate: PROGRAM.race.date,
-           history: [], active: null, unit: "kg", deload: {} };
+           history: [], active: null, unit: "kg", deload: {}, weeks: {} };
 }
 function load() {
   try {
@@ -238,6 +237,7 @@ function render() {
   if (!state.startDate && route !== "progress") html = viewOnboarding();
   else switch (route) {
     case "program": html = viewProgram(); break;
+    case "week": html = viewWeek(args[0]); break;
     case "session": html = viewSession(args[0], args[1]); break;
     case "workout": html = state.active ? viewWorkout() : viewToday(); break;
     case "history": html = args[0] ? viewHistoryDetail(args[0]) : viewHistory(); break;
@@ -245,7 +245,7 @@ function render() {
     default: html = viewToday();
   }
   view.innerHTML = html;
-  const tab = route === "session" ? "program" : route === "workout" ? "today" : route;
+  const tab = route === "session" || route === "week" ? "program" : route === "workout" ? "today" : route;
   document.querySelectorAll(".tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   const resumeBtn = $("#resume");
   resumeBtn.hidden = !state.active || route === "workout";
@@ -301,48 +301,144 @@ function sessionCard(key, mon, opts = {}) {
   </a>`;
 }
 
-function weekStrip(mon) {
+/* ---------- week plan: Runna runs + gym days ---------- */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon … Sun
+const isHard = (r) => !!r && (r.type === "key" || r.type === "long");
+
+// Picks two gym days (A then B): never on, or the day before, a key session or long run.
+// Prefers rest days, then easy-run days (lift after the run), with 2–3 days between A and B.
+function autoGym(runs) {
+  const run = (i) => runs[WEEK_ORDER[i]];
+  const hard = (i) => i < 7 && !!run(i) && (run(i)[0] === "key" || run(i)[0] === "long");
+  const ok = (i) => !hard(i) && !hard(i + 1);
+  const val = (i) => (run(i) ? 1 : 2);
+  const gapScore = { 2: 0, 3: 2, 4: 1 };
+  let best = null;
+  for (let a = 0; a < 7; a++) for (let b = a + 2; b < 7; b++) {
+    if (!ok(a) || !ok(b)) continue;
+    const score = val(a) + val(b) + (gapScore[b - a] || 0);
+    if (!best || score > best.score) best = { score, a, b };
+  }
+  return best ? { [WEEK_ORDER[best.a]]: "A", [WEEK_ORDER[best.b]]: "B" } : {};
+}
+
+// Where this week's runs come from: edited in the app > Runna plan in program.js > template.
+function weekSpec(mon) {
+  if (state.weeks[mon]) return { ...state.weeks[mon], src: "edited" };
+  if (PROGRAM.runPlan[mon]) return { ...PROGRAM.runPlan[mon], src: "runna" };
+  return { runs: PROGRAM.template.runs, src: "template" };
+}
+function weekPlan(mon) {
+  const spec = weekSpec(mon);
+  const gym = spec.gym || autoGym(spec.runs);
+  const days = WEEK_ORDER.map((dow, i) => {
+    const r = spec.runs[dow];
+    return { date: addDays(mon, i), dow, run: r ? { type: r[0], label: r[1] || PROGRAM.runNames[r[0]] } : null, gym: gym[dow] || null };
+  });
+  const warnings = [];
+  days.forEach((d, i) => {
+    if (!d.gym) return;
+    if (isHard(d.run)) warnings.push(`${DAY_FULL[d.dow]}: lifting on the same day as your ${d.run.label.toLowerCase()}.`);
+    const next = days[i + 1];
+    if (next && isHard(next.run)) warnings.push(`${DAY_FULL[d.dow]}: heavy legs the day before your ${next.run.label.toLowerCase()}.`);
+  });
+  const gyms = days.filter((d) => d.gym);
+  if (gyms.length < 2 && spec.runs && Object.keys(spec.runs).length) warnings.push("Couldn't fit two gym days around these runs. Pick them yourself or accept one session this week.");
+  return { mon, src: spec.src, days, gyms, warnings };
+}
+const runSummary = (wp) => wp.days.filter((d) => d.run).map((d) => `${DAY_NAMES[d.dow]} ${d.run.label}`).join(" · ") || "No runs";
+const SRC_LABEL = { runna: "From your Runna plan", edited: "Edited by you", template: "Template: enter Runna's runs when you have them" };
+
+function dayNote(wp, day) {
+  const i = wp.days.indexOf(day);
+  const next = wp.days[i + 1];
+  if (day.gym && day.run) return "Run first, lift later: at least 3 h apart, ideally 6 h or more.";
+  if (day.gym) return next?.run ? `Gym day. Tomorrow is an ${next.run.type === "easy" ? "easy run, so some soreness is fine" : next.run.label.toLowerCase()}.` : "Gym day. No running today.";
+  if (day.run?.type === "key") return "Quality day. Your legs should be fresh.";
+  if (day.run?.type === "long") return "Long run day. Fuel and keep it conversational.";
+  if (day.run) return "Easy run. Keep it conversational.";
+  return "Rest day.";
+}
+
+function weekStrip(wp) {
   let cells = "";
-  for (let i = 0; i < 7; i++) {
-    const ds = addDays(mon, i);
-    const dow = parseDate(ds).getDay();
-    const sched = PROGRAM.schedule[dow];
-    const did = state.history.filter((h) => h.date === ds);
-    const cls = [ds === today() ? "now" : "", did.length ? "did" : "", !sched.gym && !sched.run ? "off" : ""].join(" ");
-    const lbl = did.length ? CHECK : sched.gym ? sched.gym : sched.run ? "•" : "–";
-    const runTag = sched.run ? `<div class="dr">${sched.run.startsWith("Long") ? "long" : sched.run.startsWith("Key") ? "key" : "easy"}</div>` : `<div class="dr">&nbsp;</div>`;
-    cells += `<div class="day ${cls}"><div class="dn">${DAY_NAMES[dow][0]}</div><div class="dd">${lbl}</div>${runTag}</div>`;
+  for (const d of wp.days) {
+    const did = state.history.filter((h) => h.date === d.date);
+    const cls = [d.date === today() ? "now" : "", did.length ? "did" : "", !d.gym && !d.run ? "off" : ""].join(" ");
+    const lbl = did.length ? CHECK : d.gym ? d.gym : d.run ? "•" : "–";
+    const runTag = `<div class="dr">${d.run ? d.run.type : "&nbsp;"}</div>`;
+    cells += `<div class="day ${cls}"><div class="dn">${DAY_NAMES[d.dow][0]}</div><div class="dd">${lbl}</div>${runTag}</div>`;
   }
   return `<div class="strip">${cells}</div>`;
+}
+
+function warningsCard(wp) {
+  if (!wp.warnings.length) return "";
+  return `<div class="note warn">${wp.warnings.map((w) => `<div>⚠️ ${esc(w)}</div>`).join("")}</div>`;
 }
 
 function viewToday() {
   const t = today();
   const info = phaseInfo(t);
-  const dow = new Date().getDay();
-  const sched = PROGRAM.schedule[dow];
+  const wp = weekPlan(info.mon);
+  const day = wp.days.find((d) => d.date === t);
+  const dow = day.dow;
   let out = `<header class="page-head">
     <div class="eyebrow">${esc(DAY_FULL[dow])}, ${esc(fmtDate(t, { day: "numeric", month: "long" }))}</div>
     <h1>Today</h1>
   </header>`;
   out += raceCard();
-  out += weekStrip(info.mon);
+  out += weekStrip(wp);
+  out += `<div class="strip-foot"><span class="muted small">${esc(SRC_LABEL[wp.src])}</span><a class="accent small" href="#/week/${wp.mon}">Edit week ›</a></div>`;
 
   out += `<h2 class="section">Today</h2>`;
-  if (sched.run) out += `<div class="card run-card"><div class="session-badge run">R</div><div class="session-main">
-      <div class="session-name">${esc(sched.run)}</div><div class="muted small">From Runna</div></div></div>`;
-  if (sched.gym) out += sessionCard(sched.gym, info.mon);
-  if (!sched.gym && !sched.run) out += `<div class="card rest-card"><div class="session-name">Rest</div></div>`;
-  if (sched.note) out += `<p class="muted small day-note">${esc(sched.note)}</p>`;
+  if (day.run) out += `<div class="card run-card"><div class="session-badge run">R</div><div class="session-main">
+      <div class="session-name">${esc(day.run.label)}</div><div class="muted small">${esc(PROGRAM.runNames[day.run.type])} · Runna</div></div></div>`;
+  if (day.gym) out += sessionCard(day.gym, info.mon);
+  if (!day.gym && !day.run) out += `<div class="card rest-card"><div class="session-name">Rest</div></div>`;
+  out += `<p class="muted small day-note">${esc(dayNote(wp, day))}</p>`;
+  out += warningsCard(wp);
 
   out += phaseBanner(info, true);
 
-  const others = GYM_DAYS.filter(([, k]) => k !== sched.gym);
+  const others = wp.gyms.filter((d) => d.date !== t);
   if (others.length) {
     out += `<h2 class="section">This week</h2>`;
-    for (const [d, k] of others) out += sessionCard(k, info.mon, { day: DAY_NAMES[d] });
+    for (const d of others) out += sessionCard(d.gym, info.mon, { day: DAY_NAMES[d.dow] });
   }
   return out;
+}
+
+function viewWeek(mon) {
+  if (!/^\d{4}-\d\d-\d\d$/.test(mon || "")) return viewProgram();
+  mon = mondayOf(mon);
+  const wp = weekPlan(mon);
+  const types = [["", "Rest"], ["easy", "Easy run"], ["key", "Key session"], ["long", "Long run"]];
+  let out = `<a class="back" href="#/program">‹ Plan</a>
+  <header class="page-head"><div class="eyebrow">Week of ${esc(fmtDate(mon, { day: "numeric", month: "long" }))}</div><h1>Runs & gym days</h1></header>
+  <p class="muted small">Copy this week's runs from Runna. Gym days are picked for you: never on, or the day before, a key session or long run. You can also set them yourself.</p>
+  <div class="card list week-edit">`;
+  for (const d of wp.days) {
+    out += `<div class="row"><div class="wk-day"><b>${DAY_NAMES[d.dow]}</b><div class="muted small">${esc(fmtDate(d.date, { day: "numeric", month: "short" }))}</div></div>
+      <div class="wk-run"><select data-action="wk-run" data-mon="${mon}" data-dow="${d.dow}">${types.map(([v, l]) => `<option value="${v}" ${(d.run?.type || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+        ${d.run ? `<input data-action="wk-label" data-mon="${mon}" data-dow="${d.dow}" value="${esc(d.run.label)}" placeholder="e.g. 6km easy">` : ""}</div>
+      <select class="wk-gym" data-action="wk-gym" data-mon="${mon}" data-dow="${d.dow}">${[["", "–"], ["A", "Gym A"], ["B", "Gym B"]].map(([v, l]) => `<option value="${v}" ${(d.gym || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>`;
+  }
+  out += `</div>${warningsCard(wp)}
+  <p class="muted small">${esc(SRC_LABEL[wp.src])}</p>
+  <button class="btn block" data-action="wk-auto" data-mon="${mon}">Pick gym days for me</button>
+  ${wp.src === "edited" ? `<button class="btn ghost block" data-action="wk-reset" data-mon="${mon}">Undo my changes for this week</button>` : ""}
+  <button class="btn ghost block" data-action="wk-copy" data-mon="${mon}">Copy these runs to the following week</button>`;
+  return out;
+}
+
+// Make an editable copy of a week before changing it.
+function editWeek(mon) {
+  if (!state.weeks[mon]) {
+    const spec = weekSpec(mon);
+    state.weeks[mon] = { runs: JSON.parse(JSON.stringify(spec.runs)), gym: { ...(spec.gym || autoGym(spec.runs)) }, gymManual: !!spec.gym };
+  }
+  return state.weeks[mon];
 }
 
 function viewOnboarding() {
@@ -375,15 +471,19 @@ function viewProgram() {
       lastGroup = group;
     }
     const p = phaseText(info.phase);
-    const doneCount = GYM_DAYS.filter(([, k]) => completedFor(mon, k).length).length;
-    const planned = GYM_DAYS.filter(([, k]) => sessionRx(k, info).length).length;
+    const wp = weekPlan(mon);
+    const doneCount = wp.gyms.filter((d) => completedFor(mon, d.gym).length).length;
+    const planned = wp.gyms.filter((d) => sessionRx(d.gym, info).length).length;
     const isNow = mon === curMon;
     out += `<details class="week ${mon < curMon ? "past" : ""}" ${isNow ? "open" : ""}>
       <summary><div><div class="week-title">${esc(fmtDate(mon, { day: "numeric", month: "short" }))}${isNow ? ` <span class="pill live">Now</span>` : ""}${info.deload ? ` <span class="pill">Deload</span>` : ""}</div>
         <div class="muted small">${esc(phaseLabel(info))} · ${esc(p.title)}</div></div>
         <div class="ring" style="--p:${planned ? (doneCount / planned) * 100 : 0}">${doneCount}/${planned}</div></summary>
       <p class="muted small week-text">${esc(p.text)}</p>
-      ${GYM_DAYS.map(([d, k]) => sessionCard(k, mon, { day: DAY_NAMES[d] })).join("")}
+      <a class="week-runs" href="#/week/${mon}"><div><div class="small"><b>Runs:</b> ${esc(runSummary(wp))}</div>
+        <div class="muted small">${esc(SRC_LABEL[wp.src])}</div></div><span class="accent small">Edit ›</span></a>
+      ${warningsCard(wp)}
+      ${wp.gyms.map((d) => sessionCard(d.gym, mon, { day: DAY_NAMES[d.dow] })).join("")}
       ${info.canDeload ? `<button class="btn ghost small-btn" data-action="toggle-deload" data-mon="${mon}">${info.deload ? "Make this a normal week" : "Make this a deload week"}</button>` : ""}
     </details>`;
   }
@@ -619,6 +719,19 @@ document.addEventListener("click", (e) => {
         state.history = state.history.filter((h) => h.id !== el.dataset.id); save(); go("#/history");
       }
       break;
+    case "wk-auto": {
+      const w = editWeek(el.dataset.mon);
+      w.gym = autoGym(w.runs); w.gymManual = false;
+      save(); keepScroll(); toast("Gym days picked around your runs"); break;
+    }
+    case "wk-reset":
+      delete state.weeks[el.dataset.mon]; save(); keepScroll(); toast("Back to the original week"); break;
+    case "wk-copy": {
+      const next = addDays(el.dataset.mon, 7);
+      const runs = JSON.parse(JSON.stringify(weekSpec(el.dataset.mon).runs));
+      state.weeks[next] = { runs, gym: autoGym(runs), gymManual: false };
+      save(); go(`#/week/${next}`); toast("Runs copied. Adjust anything that's different."); break;
+    }
     case "export": exportData(); break;
     case "reset":
       if (confirm("Erase ALL workouts and settings? This can't be undone.") && confirm("Really erase everything?")) {
@@ -634,6 +747,11 @@ document.addEventListener("input", (e) => {
   if (act === "weight") { state.active.items[el.dataset.id].weight = el.value.trim(); save(); }
   else if (act === "reps") { state.active.items[el.dataset.id].reps = el.value.trim(); save(); }
   else if (act === "notes") { state.active.notes = el.value; save(); }
+  else if (act === "wk-label") {
+    const w = editWeek(el.dataset.mon);
+    const r = w.runs[el.dataset.dow];
+    if (r) { r[1] = el.value.trim() || PROGRAM.runNames[r[0]]; save(); }
+  }
 });
 
 document.addEventListener("change", (e) => {
@@ -643,6 +761,21 @@ document.addEventListener("change", (e) => {
   else if (act === "block-date" && el.value) { state.blockStart = el.value; save(); toast("Half block start updated"); }
   else if (act === "race-date" && el.value) { state.raceDate = el.value; save(); toast("Race day updated"); }
   else if (act === "unit") { state.unit = el.value; save(); }
+  else if (act === "wk-run") {
+    const w = editWeek(el.dataset.mon);
+    if (el.value) w.runs[el.dataset.dow] = [el.value, PROGRAM.runNames[el.value]];
+    else delete w.runs[el.dataset.dow];
+    if (!w.gymManual) w.gym = autoGym(w.runs);
+    save(); keepScroll();
+  } else if (act === "wk-label") { save(); keepScroll(); }
+  else if (act === "wk-gym") {
+    const w = editWeek(el.dataset.mon);
+    // one A and one B per week: setting a session moves it off any other day
+    if (el.value) for (const k of Object.keys(w.gym)) if (w.gym[k] === el.value) delete w.gym[k];
+    if (el.value) w.gym[el.dataset.dow] = el.value; else delete w.gym[el.dataset.dow];
+    w.gymManual = true;
+    save(); keepScroll();
+  }
   else if (act === "import" && el.files[0]) importData(el.files[0]);
 });
 

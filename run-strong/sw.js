@@ -1,6 +1,6 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
 // Bump VERSION whenever you deploy changes.
-const VERSION = "rs-v1";
+const VERSION = "rs-v2";
 const FILES = ["./", "index.html", "styles.css", "program.js", "app.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {

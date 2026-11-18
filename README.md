@@ -39,12 +39,15 @@ calves and a couple of accessories) built around a Runna half-marathon plan.
 - **Phases change by date**: ramp-in (first 2 weeks) → base "build strength" → half block "hold strength"
   (fewer sets, accessories dropped) → taper (2 × 3 at ~80%) → race week (upper body only).
   Deload every 4th week (half the sets), which you can switch on or off for any week to match Runna.
-- **Today**: race countdown, the week with Runna's run days (Mon easy · Wed key · Thu easy · Sun long), today's session.
+- **Runs from Runna**: each week shows your actual Runna runs (the post-race recovery plan is built in) and places
+  Gym A/B around them: never on, or the day before, a key session or long run. Enter later Runna weeks in
+  Plan → Edit (or "Copy these runs to the following week"); weeks without runs use a template.
+- **Today**: race countdown, this week's runs and gym days, today's run and/or session with timing advice.
 - **Workout**: weight, reps and "reps left in the tank" per exercise; suggests next time's weight
   (double progression in base, hold in the half block, ~80% in the taper).
 - **Progress**: key-lift trends, settings for programme start / half-block start / race day, backup.
 
-Dates, exercises and the weekly layout live in `run-strong/program.js`.
+Dates, exercises and Runna weeks (`runPlan`) live in `run-strong/program.js`.
 
 ```bash
 python3 -m http.server 8766 --directory run-strong
