@@ -10,16 +10,19 @@ const PROGRAM = {
     blockStart: "2027-02-08", // Monday the Runna half-marathon block starts
   },
 
-  // 0 = Sunday … 6 = Saturday. `run` is what Runna should have on that day (set your Runna days to match).
-  schedule: {
-    1: { gym: "A", run: "Easy run", note: "Run in the morning, lift later. Ideally 6 h or more between them, at least 3 h." },
-    2: { run: null, note: "Rest day." },
-    3: { run: "Key session (intervals or tempo)", note: "Quality day. Your legs should be fresh: no heavy lifting since Monday." },
-    4: { gym: "B", run: "Easy run", note: "Run in the morning, lift later. Ideally 6 h or more between them, at least 3 h." },
-    5: { run: null, note: "Rest day." },
-    6: { run: null, note: "Rest day, or easy cross-training." },
-    0: { run: "Long run", note: "Long run day. Thursday's deadlifts are 72 h behind you." },
+  // Runna runs by week (key = that week's Monday). Days: 1 = Mon … 6 = Sat, 0 = Sun.
+  // Run types: easy | key (intervals/tempo/repeats) | long.
+  // `gym` is optional: leave it out and the app picks gym days around the runs.
+  // Weeks you enter in the app (Plan → Edit runs & gym days) override these.
+  runPlan: {
+    // Post-race recovery plan
+    "2026-11-16": { runs: { 2: ["easy", "5km easy"], 4: ["easy", "5km easy"], 6: ["easy", "5km easy"] }, gym: { 3: "A", 5: "B" } },
+    "2026-11-23": { runs: { 3: ["easy", "5km easy"], 4: ["easy", "6km easy"], 0: ["long", "9km long run"] }, gym: { 1: "A", 4: "B" } },
+    "2026-11-30": { runs: { 3: ["key", "7km · 1km repeats"], 4: ["easy", "6km easy"], 6: ["easy", "6km easy"], 0: ["long", "10km long run"] }, gym: { 1: "A", 4: "B" } },
   },
+  // Used for weeks with no Runna runs entered yet (same shape as week 3 of the recovery plan).
+  template: { runs: { 3: ["key", "Key session"], 4: ["easy", "Easy run"], 6: ["easy", "Easy run"], 0: ["long", "Long run"] } },
+  runNames: { easy: "Easy run", key: "Key session", long: "Long run" },
 
   // How each phase changes the sessions. See rxFor() below.
   phases: {
@@ -33,9 +36,9 @@ const PROGRAM = {
     deload: { title: "Deload week", effort: "3+ reps in the tank",
               text: "Half the sets at the same weight. Try to line this up with Runna's easier week; you can move it from the Today screen." },
     taper:  { title: "Taper", effort: "Crisp, not hard",
-              text: "Two short sessions at about 80% for 2 × 3. Leave every set feeling fast. Thursday is your last leg session before the race." },
+              text: "Two short sessions at about 80% for 2 × 3. Leave every set feeling fast. The second one is your last leg session before the race." },
     race:   { title: "Race week", effort: "Easy",
-              text: "Upper body only on Monday, nothing heavy after that. Good luck!" },
+              text: "One short upper-body session early in the week, nothing heavy after that. Good luck!" },
     post:   { title: "After the race", effort: "3+ reps in the tank",
               text: "Recover first. When you're ready to lift again, treat it like the ramp-in. Change the dates in Progress → Settings to plan your next race." },
   },
